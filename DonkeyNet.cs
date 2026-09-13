@@ -307,7 +307,7 @@ namespace DonkeyNet
 
         private static WebClient CreateWebClient()
         {
-            var client = new WebClient { Encoding = Encoding.UTF8 };
+            var client = new TimeoutWebClient { Encoding = Encoding.UTF8 };
             client.Headers[HttpRequestHeader.UserAgent] = "DonkeyNet/" + Assembly.GetExecutingAssembly().GetName().Version;
             return client;
         }
@@ -611,6 +611,18 @@ namespace DonkeyNet
                 AverageLatency = averageLatency;
                 Failures = failures;
                 Successes = successes;
+            }
+        }
+
+        private sealed class TimeoutWebClient : WebClient
+        {
+            protected override WebRequest GetWebRequest(Uri address)
+            {
+                WebRequest request = base.GetWebRequest(address);
+                request.Timeout = 15000;
+                var httpRequest = request as HttpWebRequest;
+                if (httpRequest != null) httpRequest.ReadWriteTimeout = 15000;
+                return request;
             }
         }
 
