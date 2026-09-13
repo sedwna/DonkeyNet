@@ -89,6 +89,7 @@ finally {
     /reference:Microsoft.CSharp.dll `
     /reference:System.dll `
     /reference:System.Drawing.dll `
+    /reference:System.Management.dll `
     /reference:System.Windows.Forms.dll `
     /win32icon:"$iconFile" `
     /out:"$outputDirectory\DonkeyNet.exe" `

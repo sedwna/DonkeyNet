@@ -7,10 +7,10 @@
 **یک اینترنت‌سنج شوخ‌طبع، بسیار سبک و همیشه‌فعال برای ویندوز**
 
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)
-![Size](https://img.shields.io/badge/EXE-275%20KB-22C55E)
+![Size](https://img.shields.io/badge/EXE-282%20KB-22C55E)
 ![Runtime](https://img.shields.io/badge/.NET%20Framework-4.x-512BD4?logo=dotnet&logoColor=white)
 ![Language](https://img.shields.io/badge/UI-فارسی-F59E0B)
-![Version](https://img.shields.io/badge/version-1.2.0-EF4444)
+![Version](https://img.shields.io/badge/version-1.2.1-EF4444)
 
 [**دانلود نسخهٔ نصبی — پیشنهادشده**](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet-Setup.exe)
 
@@ -52,6 +52,8 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 - نمایش آیکن اختصاصی در System Tray و اعلان‌های ویندوز
 - نمایش نام Wi-Fi یا رابط شبکه با عبارت «سوار کدوم خری؟»
 - نمایش پینگ با عنوان شوخ‌طبعانهٔ «سرعت خر»
+- سنجش مسیر واقعی وب با پشتیبانی از Proxy، PAC و VPN ویندوز
+- تشخیص شبکهٔ فیزیکی و نادیده‌گرفتن نام آداپتورهای مجازی VPN
 - چهار وضعیت: خوب، ضعیف، خیلی ضعیف و قطع
 - سنجش هر ۱۰ ثانیه با سه مقصد مستقل
 - فیلتر نوسان لحظه‌ای با نیاز به دو نتیجهٔ مشابه پشت سر هم
@@ -89,7 +91,7 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 | خیلی خر است | پینگ ۳۵۰ میلی‌ثانیه یا دو خطا از سه سنجش |
 | خود خر است | پینگ ۷۰۰ میلی‌ثانیه یا قطع کامل |
 
-اگر شبکه ICMP را مسدود کرده باشد، برنامه برای جلوگیری از تشخیص اشتباهِ قطعی، اتصال TCP را نیز بررسی می‌کند.
+برنامه علاوه بر ICMP، مسیر واقعی وب را با تنظیمات Proxy/PAC ویندوز بررسی می‌کند تا پاسخ صفر یا ساختگی VPN باعث نمایش پینگ اشتباه نشود. اگر ICMP مسدود باشد نیز سنجش وب و در مرحلهٔ آخر اتصال TCP جلوی تشخیص اشتباه قطعی را می‌گیرند.
 
 ## ساخت از سورس
 

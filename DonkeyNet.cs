@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Management;
 using System.Net;
+using System.Net.Cache;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
@@ -20,8 +22,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("A tiny Persian Windows internet quality monitor")]
 [assembly: AssemblyCompany("sedwna")]
 [assembly: AssemblyProduct("DonkeyNet")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 namespace DonkeyNet
 {
@@ -51,11 +53,13 @@ namespace DonkeyNet
         // Thresholds are intentionally easy to edit and rebuild.
         private const int CheckEverySeconds = 10;
         private const int PingTimeoutMs = 1200;
+        private const int WebProbeTimeoutMs = 2500;
         private const int Level1LatencyMs = 180;
         private const int Level2LatencyMs = 350;
         private const int Level3LatencyMs = 700;
         private static readonly TimeSpan ReminderInterval = TimeSpan.FromMinutes(10);
         private static readonly string[] Targets = { "1.1.1.1", "8.8.8.8", "9.9.9.9" };
+        private static readonly Uri ConnectivityProbeUrl = new Uri("http://www.msftconnecttest.com/connecttest.txt");
         private const string StartupValueName = "DonkeyNet";
         private const string VersionUrl = "https://github.com/sedwna/DonkeyNet/releases/latest/download/VERSION";
         private const string DownloadUrl = "https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe";
@@ -176,39 +180,121 @@ namespace DonkeyNet
 
         private static async Task<ConnectionResult> MeasureAsync()
         {
-            var latencies = new List<long>();
-            int failures = 0;
+            // ICMP may be blocked or answered locally by a VPN. Probe the normal web
+            // path too; HttpWebRequest honours the Windows proxy/PAC configuration.
+            var pingTasks = new List<Task<long>>();
+            foreach (string target in Targets) pingTasks.Add(MeasurePingAsync(target));
+            Task<long> webTask = MeasureWebProbeAsync();
 
-            foreach (string target in Targets)
+            long[] pingResults = await Task.WhenAll(pingTasks);
+            long webLatency = await webTask;
+            long tcpLatency = -1;
+            bool hasPingSuccess = false;
+            foreach (long latency in pingResults)
+                if (latency >= 0) hasPingSuccess = true;
+            if (webLatency < 0 && !hasPingSuccess)
+                tcpLatency = await MeasureTcpAsync("1.1.1.1", 443, PingTimeoutMs);
+
+            return CombineMeasurements(pingResults, webLatency, tcpLatency);
+        }
+
+        private static ConnectionResult CombineMeasurements(long[] pingResults, long webLatency, long tcpLatency)
+        {
+            var pingLatencies = new List<long>();
+            foreach (long latency in pingResults)
+                if (latency >= 0) pingLatencies.Add(latency);
+
+            int pingFailures = Targets.Length - pingLatencies.Count;
+            long pingAverage = Average(pingLatencies);
+
+            if (webLatency >= 0)
             {
-                try
-                {
-                    using (var ping = new Ping())
-                    {
-                        PingReply reply = await ping.SendPingAsync(target, PingTimeoutMs);
-                        if (reply.Status == IPStatus.Success) latencies.Add(reply.RoundtripTime);
-                        else failures++;
-                    }
-                }
-                catch { failures++; }
+                // Use the slower real path. This prevents a VPN's synthetic 0 ms
+                // ICMP reply from hiding the latency users actually experience.
+                long effectiveLatency = pingLatencies.Count == 0
+                    ? webLatency
+                    : Math.Max(webLatency, pingAverage);
+                int failures = pingLatencies.Count == 0 ? 0 : pingFailures;
+                return new ConnectionResult(Math.Max(1, effectiveLatency), failures, Math.Max(1, pingLatencies.Count));
             }
 
-            // Some networks block ICMP. A TCP fallback prevents a false "offline" warning.
-            if (latencies.Count == 0)
+            if (pingLatencies.Count > 0)
+                return new ConnectionResult(Math.Max(1, pingAverage), pingFailures, pingLatencies.Count);
+
+            // Last resort for networks that block both the connectivity probe and ICMP.
+            if (tcpLatency >= 0)
+                return new ConnectionResult(Math.Max(1, tcpLatency), 2, 1);
+
+            return new ConnectionResult(0, Targets.Length, 0);
+        }
+
+        private static async Task<long> MeasurePingAsync(string target)
+        {
+            try
             {
-                long tcpLatency = await MeasureTcpAsync("1.1.1.1", 443, PingTimeoutMs);
-                if (tcpLatency >= 0)
+                using (var ping = new Ping())
                 {
-                    latencies.Add(tcpLatency);
-                    failures = 2;
+                    PingReply reply = await ping.SendPingAsync(target, PingTimeoutMs);
+                    return reply.Status == IPStatus.Success ? Math.Max(1, reply.RoundtripTime) : -1;
                 }
             }
+            catch { return -1; }
+        }
 
-            long average = 0;
-            foreach (long latency in latencies) average += latency;
-            if (latencies.Count > 0) average /= latencies.Count;
+        private static async Task<long> MeasureWebProbeAsync()
+        {
+            HttpWebRequest request = null;
+            try
+            {
+                request = (HttpWebRequest)WebRequest.Create(ConnectivityProbeUrl);
+                request.Method = "GET";
+                request.Proxy = WebRequest.DefaultWebProxy;
+                if (request.Proxy != null) request.Proxy.Credentials = CredentialCache.DefaultCredentials;
+                request.Credentials = CredentialCache.DefaultCredentials;
+                request.UserAgent = "DonkeyNet/" + Assembly.GetExecutingAssembly().GetName().Version;
+                request.AllowAutoRedirect = false;
+                request.KeepAlive = false;
+                request.CachePolicy = new RequestCachePolicy(RequestCacheLevel.NoCacheNoStore);
+                request.Timeout = WebProbeTimeoutMs;
+                request.ReadWriteTimeout = WebProbeTimeoutMs;
 
-            return new ConnectionResult(average, failures, latencies.Count);
+                var stopwatch = Stopwatch.StartNew();
+                Task<WebResponse> responseTask = request.GetResponseAsync();
+                Task completed = await Task.WhenAny(responseTask, Task.Delay(WebProbeTimeoutMs));
+                if (completed != responseTask)
+                {
+                    request.Abort();
+                    try { await responseTask; }
+                    catch { }
+                    return -1;
+                }
+
+                using (WebResponse response = await responseTask)
+                using (Stream stream = response.GetResponseStream())
+                using (var reader = new StreamReader(stream, Encoding.ASCII, false, 128))
+                {
+                    string body = await reader.ReadToEndAsync();
+                    stopwatch.Stop();
+                    var httpResponse = response as HttpWebResponse;
+                    if (httpResponse == null || httpResponse.StatusCode != HttpStatusCode.OK ||
+                        !string.Equals(body.Trim(), "Microsoft Connect Test", StringComparison.Ordinal))
+                        return -1;
+                    return Math.Max(1, stopwatch.ElapsedMilliseconds);
+                }
+            }
+            catch { return -1; }
+            finally
+            {
+                if (request != null) request.Abort();
+            }
+        }
+
+        private static long Average(List<long> values)
+        {
+            if (values.Count == 0) return 0;
+            long total = 0;
+            foreach (long value in values) total += value;
+            return total / values.Count;
         }
 
         private static async Task<long> MeasureTcpAsync(string host, int port, int timeoutMs)
@@ -223,7 +309,7 @@ namespace DonkeyNet
                 catch { return -1; }
                 if (!client.Connected) return -1;
                 stopwatch.Stop();
-                return stopwatch.ElapsedMilliseconds;
+                return Math.Max(1, stopwatch.ElapsedMilliseconds);
             }
         }
 
@@ -465,6 +551,9 @@ namespace DonkeyNet
 
         private static string GetConnectionName()
         {
+            string profileName = GetPhysicalConnectionProfileName();
+            if (profileName != "نامشخص") return profileName;
+
             object managerObject = null;
             object networksObject = null;
             try
@@ -477,11 +566,9 @@ namespace DonkeyNet
                 {
                     try
                     {
-                        if (network.IsConnectedToInternet)
-                        {
-                            string name = CleanConnectionName((string)network.GetName());
-                            if (name != "نامشخص") return name;
-                        }
+                        string name = CleanConnectionName((string)network.GetName());
+                        if (network.IsConnectedToInternet && name != "نامشخص" && !IsLikelyVirtualName(name))
+                            return name;
                     }
                     finally
                     {
@@ -525,10 +612,8 @@ namespace DonkeyNet
                 NetworkInterface fallback = null;
                 foreach (NetworkInterface network in NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    if (network.OperationalStatus != OperationalStatus.Up ||
-                        network.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
-                        network.NetworkInterfaceType == NetworkInterfaceType.Tunnel ||
-                        network.GetIPProperties().GatewayAddresses.Count == 0) continue;
+                    if (!IsPhysicalAdapter(network) || network.GetIPProperties().GatewayAddresses.Count == 0)
+                        continue;
 
                     if (network.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
                         return CleanConnectionName(network.Name);
@@ -539,6 +624,89 @@ namespace DonkeyNet
             catch { }
 
             return "نامشخص";
+        }
+
+        private static string GetPhysicalConnectionProfileName()
+        {
+            try
+            {
+                var interfacesByIndex = new Dictionary<int, NetworkInterface>();
+                foreach (NetworkInterface network in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (!IsPhysicalAdapter(network)) continue;
+                    try
+                    {
+                        IPv4InterfaceProperties ipv4 = network.GetIPProperties().GetIPv4Properties();
+                        if (ipv4 != null) interfacesByIndex[ipv4.Index] = network;
+                    }
+                    catch { }
+                }
+
+                string bestName = null;
+                int bestScore = -1;
+                using (var searcher = new ManagementObjectSearcher(
+                    @"root\StandardCimv2",
+                    "SELECT Name, InterfaceIndex, IPv4Connectivity, IPv6Connectivity FROM MSFT_NetConnectionProfile"))
+                using (ManagementObjectCollection profiles = searcher.Get())
+                {
+                    foreach (ManagementObject profile in profiles)
+                    using (profile)
+                    {
+                        int interfaceIndex = Convert.ToInt32(profile["InterfaceIndex"]);
+                        NetworkInterface network;
+                        if (!interfacesByIndex.TryGetValue(interfaceIndex, out network)) continue;
+
+                        string name = CleanConnectionName(Convert.ToString(profile["Name"]));
+                        if (name == "نامشخص") continue;
+                        int score = PhysicalAdapterScore(network);
+                        if (Convert.ToUInt32(profile["IPv4Connectivity"]) == 4 ||
+                            Convert.ToUInt32(profile["IPv6Connectivity"]) == 4) score += 10;
+                        if (score > bestScore)
+                        {
+                            bestName = name;
+                            bestScore = score;
+                        }
+                    }
+                }
+                return bestName ?? "نامشخص";
+            }
+            catch { return "نامشخص"; }
+        }
+
+        private static bool IsPhysicalAdapter(NetworkInterface network)
+        {
+            if (network == null || network.OperationalStatus != OperationalStatus.Up ||
+                network.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                network.NetworkInterfaceType == NetworkInterfaceType.Tunnel ||
+                network.NetworkInterfaceType == NetworkInterfaceType.Ppp)
+                return false;
+
+            string identity = network.Name + " " + network.Description;
+            return !IsLikelyVirtualName(identity);
+        }
+
+        private static bool IsLikelyVirtualName(string value)
+        {
+            string identity = (value ?? string.Empty).ToLowerInvariant();
+            string[] virtualMarkers =
+            {
+                "virtual", "vpn", "wireguard", "openvpn", "tap-windows", "wintun", "tunnel",
+                "hyper-v", "vethernet", "wsl", "loopback", "tailscale", "zerotier",
+                "wan miniport", "hamachi"
+            };
+            foreach (string marker in virtualMarkers)
+                if (identity.Contains(marker)) return true;
+            return false;
+        }
+
+        private static int PhysicalAdapterScore(NetworkInterface network)
+        {
+            if (network.NetworkInterfaceType == NetworkInterfaceType.Wireless80211) return 300;
+            if (network.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                network.NetworkInterfaceType == NetworkInterfaceType.GigabitEthernet ||
+                network.NetworkInterfaceType == NetworkInterfaceType.FastEthernetFx ||
+                network.NetworkInterfaceType == NetworkInterfaceType.FastEthernetT) return 200;
+            return 100;
         }
 
         private static string CleanConnectionName(string value)
