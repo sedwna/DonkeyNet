@@ -10,9 +10,11 @@
 ![Size](https://img.shields.io/badge/EXE-275%20KB-22C55E)
 ![Runtime](https://img.shields.io/badge/.NET%20Framework-4.x-512BD4?logo=dotnet&logoColor=white)
 ![Language](https://img.shields.io/badge/UI-فارسی-F59E0B)
-![Version](https://img.shields.io/badge/version-1.1.2-EF4444)
+![Version](https://img.shields.io/badge/version-1.2.0-EF4444)
 
-[**دریافت مستقیم آخرین نسخهٔ DonkeyNet.exe**](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe)
+[**دانلود نسخهٔ نصبی — پیشنهادشده**](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet-Setup.exe)
+
+[دریافت نسخهٔ پرتابل](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe)
 
 </div>
 
@@ -20,7 +22,7 @@
 
 <div dir="rtl">
 
-DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه کیفیت اتصال را می‌سنجد و فقط وقتی لازم باشد با یکی از چهار پیام زیر خبر می‌دهد. بدون نصب، بدون تبلیغ و بدون ارسال اطلاعات.
+DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه کیفیت اتصال را می‌سنجد و فقط وقتی لازم باشد با یکی از چهار پیام زیر خبر می‌دهد. با نصب سریع یا اجرای پرتابل، بدون تبلیغ و بدون ارسال اطلاعات.
 
 ## تصاویر وضعیت‌ها
 
@@ -46,6 +48,7 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 ## امکانات
 
 - فایل اجرایی مستقل با حجم حدود **۲۷۵ کیلوبایت**
+- Setup استاندارد با Start Menu، میانبر اختیاری دسکتاپ و Uninstall
 - نمایش آیکن اختصاصی در System Tray و اعلان‌های ویندوز
 - نمایش نام Wi-Fi یا رابط شبکه با عبارت «سوار کدوم خری؟»
 - نمایش پینگ با عنوان شوخ‌طبعانهٔ «سرعت خر»
@@ -58,11 +61,14 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 - منوی راست‌کلیک برای بررسی فوری، تنظیم Startup و خروج
 - بدون Telemetry، حساب کاربری یا جمع‌آوری اطلاعات
 
-## اجرا
+## نصب و اجرا
 
-۱. فایل [`dist/DonkeyNet.exe`](dist/DonkeyNet.exe) را دانلود و اجرا کنید.
-۲. برنامه بدون بازکردن پنجره، کنار ساعت ویندوز قرار می‌گیرد.
-۳. برای بررسی فوری روی آیکن دوبار کلیک کنید یا از منوی راست‌کلیک گزینهٔ «بررسی همین حالا» را بزنید.
+۱. فایل [`DonkeyNet-Setup.exe`](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet-Setup.exe) را دانلود و اجرا کنید.
+۲. مراحل کوتاه نصب را ادامه دهید؛ برنامه برای همان کاربر و بدون نیاز به Administrator نصب می‌شود.
+۳. برنامه بدون بازکردن پنجره، کنار ساعت ویندوز قرار می‌گیرد.
+۴. برای بررسی فوری روی آیکن دوبار کلیک کنید یا از منوی راست‌کلیک گزینهٔ «بررسی همین حالا» را بزنید.
+
+اگر نصب نمی‌خواهید، فایل [`DonkeyNet.exe`](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe) را به‌صورت پرتابل اجرا کنید.
 
 > چون فایل امضای دیجیتال تجاری ندارد، ممکن است SmartScreen در اولین اجرا هشدار بدهد. در این حالت `More info` و سپس `Run anyway` را انتخاب کنید.
 
@@ -101,17 +107,27 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 .\docs\generate-status-images.ps1
 ```
 
+برای ساخت Setup، ابتدا [Inno Setup 6](https://jrsoftware.org/isinfo.php) را نصب و سپس اجرا کنید:
+
+```powershell
+.\build-installer.ps1
+```
+
 ## ساختار پروژه
 
 ```text
 DonkeyNet.cs                       کد اصلی برنامه
 VERSION                            شمارهٔ آخرین نسخهٔ منتشرشده
 build.ps1                          ساخت فایل اجرایی و آیکن ویندوز
+build-installer.ps1                ساخت Setup و فایل SHA-256 آن
+installer/DonkeyNet.iss            تنظیمات نصب‌ساز Inno Setup
 assets/donkey-icon.png             لوگوی برنامه
 docs/generate-status-images.ps1    سازندهٔ تصاویر وضعیت
 docs/images/                       تصاویر README
 dist/DonkeyNet.exe                 نسخهٔ آمادهٔ اجرا
 dist/DonkeyNet.exe.sha256          هش صحت فایل به‌روزرسانی
+dist/DonkeyNet-Setup.exe           نصب‌ساز آمادهٔ ویندوز
+dist/DonkeyNet-Setup.exe.sha256    هش صحت نصب‌ساز
 dist/DonkeyNet.ico                 آیکن چنداندازهٔ ویندوز
 ```
 

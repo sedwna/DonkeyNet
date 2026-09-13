@@ -1,6 +1,7 @@
 bin/
 obj/
 .vs/
+.installer-test/
 *.user
 *.suo
 *.pdb

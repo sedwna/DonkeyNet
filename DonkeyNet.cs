@@ -20,8 +20,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("A tiny Persian Windows internet quality monitor")]
 [assembly: AssemblyCompany("sedwna")]
 [assembly: AssemblyProduct("DonkeyNet")]
-[assembly: AssemblyVersion("1.1.2.0")]
-[assembly: AssemblyFileVersion("1.1.2.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace DonkeyNet
 {
