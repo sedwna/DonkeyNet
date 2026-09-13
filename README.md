@@ -10,7 +10,7 @@
 ![Size](https://img.shields.io/badge/EXE-275%20KB-22C55E)
 ![Runtime](https://img.shields.io/badge/.NET%20Framework-4.x-512BD4?logo=dotnet&logoColor=white)
 ![Language](https://img.shields.io/badge/UI-فارسی-F59E0B)
-![Version](https://img.shields.io/badge/version-1.1.0-EF4444)
+![Version](https://img.shields.io/badge/version-1.1.1-EF4444)
 
 [**دریافت مستقیم آخرین نسخهٔ DonkeyNet.exe**](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe)
 
