@@ -2,14 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32;
+
+[assembly: AssemblyTitle("DonkeyNet")]
+[assembly: AssemblyDescription("A tiny Persian Windows internet quality monitor")]
+[assembly: AssemblyCompany("sedwna")]
+[assembly: AssemblyProduct("DonkeyNet")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace DonkeyNet
 {
@@ -45,13 +57,18 @@ namespace DonkeyNet
         private static readonly TimeSpan ReminderInterval = TimeSpan.FromMinutes(10);
         private static readonly string[] Targets = { "1.1.1.1", "8.8.8.8", "9.9.9.9" };
         private const string StartupValueName = "DonkeyNet";
+        private const string VersionUrl = "https://github.com/sedwna/DonkeyNet/releases/latest/download/VERSION";
+        private const string DownloadUrl = "https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe";
+        private const string ChecksumUrl = "https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe.sha256";
 
         private readonly NotifyIcon trayIcon;
         private readonly Icon appIcon;
         private readonly System.Windows.Forms.Timer timer;
         private readonly ToolStripMenuItem statusItem;
         private readonly ToolStripMenuItem startupItem;
+        private readonly ToolStripMenuItem updateItem;
         private int checking;
+        private int updating;
         private int currentLevel;
         private int candidateLevel = -1;
         private int candidateCount;
@@ -67,6 +84,9 @@ namespace DonkeyNet
             var checkNowItem = new ToolStripMenuItem("بررسی همین حالا");
             checkNowItem.Click += async delegate { await CheckConnectionAsync(true); };
 
+            updateItem = new ToolStripMenuItem("بررسی برای به‌روزرسانی");
+            updateItem.Click += async delegate { await CheckForUpdatesAsync(); };
+
             var exitItem = new ToolStripMenuItem("خروج");
             exitItem.Click += delegate { Exit(); };
 
@@ -74,6 +94,7 @@ namespace DonkeyNet
             menu.Items.Add(statusItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(checkNowItem);
+            menu.Items.Add(updateItem);
             menu.Items.Add(startupItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(exitItem);
@@ -206,6 +227,123 @@ namespace DonkeyNet
             }
         }
 
+        private async Task CheckForUpdatesAsync()
+        {
+            if (Interlocked.Exchange(ref updating, 1) == 1) return;
+
+            updateItem.Enabled = false;
+            statusItem.Text = "در حال بررسی به‌روزرسانی…";
+            string downloadedPath = null;
+
+            try
+            {
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
+                string cacheBuster = "?t=" + DateTime.UtcNow.Ticks;
+                Version latestVersion;
+                string remoteVersion;
+
+                using (var client = CreateWebClient())
+                    remoteVersion = await client.DownloadStringTaskAsync(new Uri(VersionUrl + cacheBuster));
+
+                if (!Version.TryParse(remoteVersion.Trim().TrimStart('v', 'V'), out latestVersion))
+                    throw new InvalidDataException("نسخهٔ منتشرشده معتبر نیست.");
+
+                Version currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
+                if (latestVersion <= currentVersion)
+                {
+                    statusItem.Text = "برنامه به‌روز است";
+                    ShowCustomBalloon("\u200Fبرنامه به‌روز است.",
+                        "\u200Fنسخهٔ فعلی: " + ToPersianDigits(currentVersion.ToString(3)));
+                    return;
+                }
+
+                statusItem.Text = "در حال دریافت نسخهٔ " + ToPersianDigits(latestVersion.ToString(3)) + "…";
+                byte[] executable;
+                string expectedChecksum;
+                using (var client = CreateWebClient())
+                {
+                    Task<byte[]> executableTask = client.DownloadDataTaskAsync(new Uri(DownloadUrl + cacheBuster));
+                    using (var checksumClient = CreateWebClient())
+                    {
+                        Task<string> checksumTask = checksumClient.DownloadStringTaskAsync(new Uri(ChecksumUrl + cacheBuster));
+                        await Task.WhenAll(executableTask, checksumTask);
+                        executable = executableTask.Result;
+                        expectedChecksum = checksumTask.Result.Trim().Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+                    }
+                }
+
+                if (executable.Length < 10240 || executable[0] != (byte)'M' || executable[1] != (byte)'Z')
+                    throw new InvalidDataException("فایل به‌روزرسانی معتبر نیست.");
+                if (!string.Equals(ComputeSha256(executable), expectedChecksum, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("صحت فایل به‌روزرسانی تأیید نشد.");
+
+                downloadedPath = Path.Combine(Path.GetTempPath(), "DonkeyNet-update-" + Guid.NewGuid().ToString("N") + ".exe");
+                File.WriteAllBytes(downloadedPath, executable);
+                string currentPath = Assembly.GetExecutingAssembly().Location;
+                StartUpdater(downloadedPath, currentPath, Process.GetCurrentProcess().Id);
+
+                ShowCustomBalloon("\u200Fبه‌روزرسانی دریافت شد.",
+                    "\u200Fنسخهٔ " + ToPersianDigits(latestVersion.ToString(3)) + " نصب و برنامه دوباره اجرا می‌شود.");
+                await Task.Delay(1400);
+                downloadedPath = null; // The updater owns the temporary file now.
+                Exit();
+            }
+            catch (Exception ex)
+            {
+                statusItem.Text = "خطا در به‌روزرسانی";
+                ShowCustomBalloon("\u200Fبه‌روزرسانی انجام نشد.", "\u200F" + ex.Message);
+            }
+            finally
+            {
+                if (downloadedPath != null)
+                {
+                    try { File.Delete(downloadedPath); }
+                    catch { }
+                }
+                updateItem.Enabled = true;
+                Interlocked.Exchange(ref updating, 0);
+            }
+        }
+
+        private static WebClient CreateWebClient()
+        {
+            var client = new WebClient { Encoding = Encoding.UTF8 };
+            client.Headers[HttpRequestHeader.UserAgent] = "DonkeyNet/" + Assembly.GetExecutingAssembly().GetName().Version;
+            return client;
+        }
+
+        private static string ComputeSha256(byte[] data)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+                return BitConverter.ToString(sha256.ComputeHash(data)).Replace("-", string.Empty);
+        }
+
+        private static void StartUpdater(string downloadedPath, string currentPath, int processId)
+        {
+            string script = string.Format(
+                "$process = Get-Process -Id {0} -ErrorAction SilentlyContinue; " +
+                "if ($process) {{ $process.WaitForExit() }}; " +
+                "Start-Sleep -Milliseconds 300; " +
+                "Copy-Item -LiteralPath {1} -Destination {2} -Force; " +
+                "Remove-Item -LiteralPath {1} -Force; " +
+                "Start-Process -FilePath {2}",
+                processId, PowerShellQuote(downloadedPath), PowerShellQuote(currentPath));
+            string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+        }
+
+        private static string PowerShellQuote(string value)
+        {
+            return "'" + value.Replace("'", "''") + "'";
+        }
+
         private static int Classify(ConnectionResult result)
         {
             if (result.Successes == 0 || result.AverageLatency >= Level3LatencyMs) return 3;
@@ -254,10 +392,13 @@ namespace DonkeyNet
             string ping = result.Successes == 0
                 ? "پینگ: قطع"
                 : string.Format("پینگ: {0} میلی‌ثانیه", ToPersianDigits(result.AverageLatency));
+            string connectionName = GetConnectionName();
+            string connection = "سوار کدوم خری؟ \u2068" + connectionName + "\u2069";
 
             // Keep every line purely right-to-left. Mixing "ms" and Persian text
             // makes Windows reorder punctuation and numbers in notification cards.
-            string text = string.Format("\u200F{0}{1}\u200F{2}", ping, Environment.NewLine, explanation);
+            string text = string.Format("\u200F{0}{1}\u200F{2}{1}\u200F{3}",
+                connection, Environment.NewLine, ping, explanation);
             title = "\u200F" + title;
             if (!ShowCustomBalloon(title, text))
             {
@@ -312,9 +453,99 @@ namespace DonkeyNet
 
         private static string ToPersianDigits(long value)
         {
-            return value.ToString()
+            return ToPersianDigits(value.ToString());
+        }
+
+        private static string ToPersianDigits(string value)
+        {
+            return value
                 .Replace('0', '۰').Replace('1', '۱').Replace('2', '۲').Replace('3', '۳').Replace('4', '۴')
                 .Replace('5', '۵').Replace('6', '۶').Replace('7', '۷').Replace('8', '۸').Replace('9', '۹');
+        }
+
+        private static string GetConnectionName()
+        {
+            object managerObject = null;
+            object networksObject = null;
+            try
+            {
+                Type managerType = Type.GetTypeFromCLSID(new Guid("DCB00C01-570F-4A9B-8D69-199FDBA5723B"));
+                managerObject = Activator.CreateInstance(managerType);
+                dynamic manager = managerObject;
+                networksObject = manager.GetNetworks(1); // NLM_ENUM_NETWORK_CONNECTED
+                foreach (dynamic network in (dynamic)networksObject)
+                {
+                    try
+                    {
+                        if (network.IsConnectedToInternet)
+                        {
+                            string name = CleanConnectionName((string)network.GetName());
+                            if (name != "نامشخص") return name;
+                        }
+                    }
+                    finally
+                    {
+                        if (Marshal.IsComObject(network)) Marshal.FinalReleaseComObject(network);
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                if (networksObject != null && Marshal.IsComObject(networksObject))
+                    Marshal.FinalReleaseComObject(networksObject);
+                if (managerObject != null && Marshal.IsComObject(managerObject))
+                    Marshal.FinalReleaseComObject(managerObject);
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "netsh.exe",
+                    Arguments = "wlan show interfaces",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using (Process process = Process.Start(startInfo))
+                {
+                    string output = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+                    Match match = Regex.Match(output, @"^\s*SSID\s*:\s*(.+?)\s*$", RegexOptions.Multiline);
+                    if (match.Success) return CleanConnectionName(match.Groups[1].Value);
+                }
+            }
+            catch { }
+
+            try
+            {
+                NetworkInterface fallback = null;
+                foreach (NetworkInterface network in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (network.OperationalStatus != OperationalStatus.Up ||
+                        network.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                        network.NetworkInterfaceType == NetworkInterfaceType.Tunnel ||
+                        network.GetIPProperties().GatewayAddresses.Count == 0) continue;
+
+                    if (network.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                        return CleanConnectionName(network.Name);
+                    if (fallback == null) fallback = network;
+                }
+                if (fallback != null) return CleanConnectionName(fallback.Name);
+            }
+            catch { }
+
+            return "نامشخص";
+        }
+
+        private static string CleanConnectionName(string value)
+        {
+            string clean = Regex.Replace(value ?? string.Empty, @"[\x00-\x1F\x7F]", string.Empty).Trim();
+            if (clean.Length == 0) return "نامشخص";
+            return clean.Length <= 40 ? clean : clean.Substring(0, 40) + "…";
         }
 
         private static string LevelName(int level)

@@ -8,6 +8,17 @@ if (-not (Test-Path -LiteralPath $compiler)) {
     throw 'کامپایلر داخلی ویندوز (.NET Framework csc.exe) پیدا نشد.'
 }
 
+$versionFile = Join-Path $PSScriptRoot 'VERSION'
+if (-not (Test-Path -LiteralPath $versionFile)) {
+    throw "فایل نسخه پیدا نشد: $versionFile"
+}
+$releaseVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+$sourceText = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'DonkeyNet.cs') -Raw
+$expectedAssemblyVersion = '[assembly: AssemblyVersion("' + $releaseVersion + '.0")]'
+if (-not $sourceText.Contains($expectedAssemblyVersion)) {
+    throw "نسخهٔ VERSION با AssemblyVersion کد یکسان نیست: $releaseVersion"
+}
+
 $outputDirectory = Join-Path $PSScriptRoot 'dist'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 
@@ -75,6 +86,7 @@ finally {
 }
 
 & $compiler /nologo /target:winexe /optimize+ /platform:anycpu `
+    /reference:Microsoft.CSharp.dll `
     /reference:System.dll `
     /reference:System.Drawing.dll `
     /reference:System.Windows.Forms.dll `
@@ -85,4 +97,11 @@ finally {
 if ($LASTEXITCODE -ne 0) { throw 'ساخت برنامه ناموفق بود.' }
 
 $file = Get-Item -LiteralPath "$outputDirectory\DonkeyNet.exe"
+$hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+$checksumPath = Join-Path $outputDirectory 'DonkeyNet.exe.sha256'
+[System.IO.File]::WriteAllText(
+    $checksumPath,
+    "$hash  DonkeyNet.exe$([Environment]::NewLine)",
+    (New-Object System.Text.UTF8Encoding($false))
+)
 Write-Host "ساخته شد: $($file.FullName) — $([math]::Round($file.Length / 1KB, 1)) KB"
