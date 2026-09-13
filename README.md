@@ -11,7 +11,7 @@
 ![Runtime](https://img.shields.io/badge/.NET%20Framework-4.x-512BD4?logo=dotnet&logoColor=white)
 ![Language](https://img.shields.io/badge/UI-فارسی-F59E0B)
 
-[**دریافت مستقیم DonkeyNet.exe**](dist/DonkeyNet.exe)
+[**دریافت مستقیم DonkeyNet.exe**](https://github.com/sedwna/DonkeyNet/raw/refs/heads/main/dist/DonkeyNet.exe)
 
 </div>
 
