@@ -10,7 +10,7 @@
 ![Size](https://img.shields.io/badge/EXE-275%20KB-22C55E)
 ![Runtime](https://img.shields.io/badge/.NET%20Framework-4.x-512BD4?logo=dotnet&logoColor=white)
 ![Language](https://img.shields.io/badge/UI-فارسی-F59E0B)
-![Version](https://img.shields.io/badge/version-1.1.1-EF4444)
+![Version](https://img.shields.io/badge/version-1.1.2-EF4444)
 
 [**دریافت مستقیم آخرین نسخهٔ DonkeyNet.exe**](https://github.com/sedwna/DonkeyNet/releases/latest/download/DonkeyNet.exe)
 
@@ -47,7 +47,8 @@ DonkeyNet کنار ساعت ویندوز می‌ماند، هر ۱۰ ثانیه 
 
 - فایل اجرایی مستقل با حجم حدود **۲۷۵ کیلوبایت**
 - نمایش آیکن اختصاصی در System Tray و اعلان‌های ویندوز
-- نمایش نام Wi-Fi یا رابط شبکه بالای پینگ با عبارت «سوار کدوم خری؟»
+- نمایش نام Wi-Fi یا رابط شبکه با عبارت «سوار کدوم خری؟»
+- نمایش پینگ با عنوان شوخ‌طبعانهٔ «سرعت خر»
 - چهار وضعیت: خوب، ضعیف، خیلی ضعیف و قطع
 - سنجش هر ۱۰ ثانیه با سه مقصد مستقل
 - فیلتر نوسان لحظه‌ای با نیاز به دو نتیجهٔ مشابه پشت سر هم

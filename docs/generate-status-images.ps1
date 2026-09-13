@@ -103,14 +103,14 @@ function New-StatusImage {
 }
 
 New-StatusImage -FileName 'status-good.png' -Accent '#22C55E' `
-    -Title 'اینترنت خر نیست.' -Connection $sampleConnection -Ping 'پینگ: ۸۵ میلی‌ثانیه' `
+    -Title 'اینترنت خر نیست.' -Connection $sampleConnection -Ping 'سرعت خر: ۸۵ میلی‌ثانیه' `
     -Description 'اینترنت خوبه، بگو حمد و سپاس خدارا.'
 New-StatusImage -FileName 'status-weak.png' -Accent '#FBBF24' `
-    -Title 'اینترنت خر است.' -Connection $sampleConnection -Ping 'پینگ: ۲۲۰ میلی‌ثانیه' `
+    -Title 'اینترنت خر است.' -Connection $sampleConnection -Ping 'سرعت خر: ۲۲۰ میلی‌ثانیه' `
     -Description 'اینترنت ضعیفه، بازم جای شکرش باقیه.'
 New-StatusImage -FileName 'status-very-weak.png' -Accent '#F97316' `
-    -Title 'اینترنت خیلی خر است.' -Connection $sampleConnection -Ping 'پینگ: ۴۸۰ میلی‌ثانیه' `
+    -Title 'اینترنت خیلی خر است.' -Connection $sampleConnection -Ping 'سرعت خر: ۴۸۰ میلی‌ثانیه' `
     -Description 'اینترنت خیلی ضعیفه، اینجا ایرانه مشکل داری جمع کن برو.'
 New-StatusImage -FileName 'status-offline.png' -Accent '#EF4444' `
-    -Title 'اینترنت خود خر است.' -Connection $sampleConnection -Ping 'پینگ: قطع' `
+    -Title 'اینترنت خود خر است.' -Connection $sampleConnection -Ping 'سرعت خر: قطع' `
     -Description 'اینترنتی وجود نداره، برو بمیر.'

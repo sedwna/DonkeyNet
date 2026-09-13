@@ -20,8 +20,8 @@ using Microsoft.Win32;
 [assembly: AssemblyDescription("A tiny Persian Windows internet quality monitor")]
 [assembly: AssemblyCompany("sedwna")]
 [assembly: AssemblyProduct("DonkeyNet")]
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.1.2.0")]
+[assembly: AssemblyFileVersion("1.1.2.0")]
 
 namespace DonkeyNet
 {
@@ -390,8 +390,8 @@ namespace DonkeyNet
             }
 
             string ping = result.Successes == 0
-                ? "پینگ: قطع"
-                : string.Format("پینگ: {0} میلی‌ثانیه", ToPersianDigits(result.AverageLatency));
+                ? "سرعت خر: قطع"
+                : string.Format("سرعت خر: {0} میلی‌ثانیه", ToPersianDigits(result.AverageLatency));
             string connectionName = GetConnectionName();
             string connection = "سوار کدوم خری؟ \u2068" + connectionName + "\u2069";
 
